@@ -1,13 +1,166 @@
-import requests
-import openpyxl
-# Настройки Bitrix24
-BITRIX_WEBHOOK_URL = 'https://your_domain.bitrix24.ru/rest/1/your_webhook/'
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from json import loads
+from logging import info
+from time import sleep
+from requests import adapters, post, exceptions
+from multidimensional_urlencode import urlencode
+
+
+from openpyxl import Workbook
+
+"""
+bx24 = Bitrix24('b24-f4kgfp.bitrix24.ru')
+BITRIX_WEBHOOK_URL = 'https://b24-f4kgfp.bitrix24.ru/rest/1/8ee1njm7naiu47s7/'
+"""
+
+
+class Bitrix24(object):
+    # domain = 'sysadmin.bitrix24.ru'
+    domain = 'b24-f4kgfp.bitrix24.ru'
+    # webhook_key = '5hi9bb2vqmqql3sr'
+    webhook_key = '8ee1njm7naiu47s7'
+    # webhook_url = 'https://%s.bitrix24.ru/rest/%d/%s/%s'
+    webhook_url = 'https://%s.bitrix24.ru/rest/%d/%s/%s'
+    timeout = 60
+
+    def __init__(self, domain, webhook_key='', webhook_user=1):
+        self.domain = domain
+        self.webhook_key = webhook_key
+        self.webhook_user = webhook_user
+
+    def get_url(self, method):
+        if self.webhook_key:
+            return self.webhook_url % (self.domain, self.webhook_user, self.webhook_key, method)
+        else:
+            return self.api_url % (self.domain, method)
+
+    @staticmethod
+    def prepare_batch(params):
+        """
+        Prepare methods for batch call
+        :param params: dict
+        :return: dict
+        """
+        if not isinstance(params, dict):
+            raise Exception('Invalid \'cmd\' structure')
+
+        batched_params = dict()
+
+        for call_id in sorted(params.keys()):
+            if not isinstance(params[call_id], list):
+                raise Exception('Invalid \'cmd\' method description')
+            method = params[call_id].pop(0)
+            if method == 'batch':
+                raise Exception('Batch call cannot contain batch methods')
+            temp = ''
+            for i in params[call_id]:
+                temp += urlencode(i) + '&'
+            batched_params[call_id] = method + '?' + temp
+
+        return batched_params
+
+    @staticmethod
+    def encode_cmd(cmd):
+        """Resort batch cmd by request keys and encode it
+        :param cmd: dict List methods for batch request with request ids
+        :return: str
+        """
+        cmd_encoded = ''
+
+        for i in sorted(cmd.keys()):
+            cmd_encoded += urlencode({'cmd': {i: cmd[i]}}) + '&'
+
+        return cmd_encoded
+
+    def call(self, method, params1=None, params2=None, params3=None, params4=None):
+        """Call Bitrix24 API method
+        :param method: Method name
+        :param params1: Method parameters 1
+        :param params2: Method parameters 2. Needed for methods with determinate consequence of parameters
+        :param params3: Method parameters 3. Needed for methods with determinate consequence of parameters
+        :param params4: Method parameters 4. Needed for methods with determinate consequence of parameters
+        :return: Call result
+        """
+        if method == '' or not isinstance(method, str):
+            raise Exception('Empty Method')
+
+        if method == 'batch' and 'prepared' not in params1:
+            params1['cmd'] = self.prepare_batch(params1['cmd'])
+            params1['prepared'] = True
+
+        encoded_parameters = ''
+
+        # print params1
+        for i in [params1, params2, params3, params4]:
+            if i is not None:
+                if 'cmd' in i:
+                    i = dict(i)
+                    encoded_parameters += self.encode_cmd(i['cmd']) + '&' + urlencode({'halt': i['halt']}) + '&'
+                elif 'filter' in i:
+                    # i = dict(i)
+                    encoded_parameters += urlencode(i)
+                else:
+                    encoded_parameters += urlencode(i) + '&'
+
+        r = {}
+        try:
+            # request url
+            url = self.get_url(method)
+            # Make API request
+            r = post(url, data=encoded_parameters, timeout=self.timeout)
+            # Decode response
+            result = loads(r.text)
+        except ValueError:
+            result = dict(error='Error on decode api response [%s]' % r.text)
+        except exceptions.ReadTimeout:
+            result = dict(error='Timeout waiting expired [%s sec]' % str(self.timeout))
+        except exceptions.ConnectionError:
+            result = dict(error='Max retries exceeded [' + str(adapters.DEFAULT_RETRIES) + ']')
+        if 'error' in result and result['error'] in ('NO_AUTH_FOUND', 'expired_token'):
+            result = self.refresh_tokens()
+            if result is not True:
+                return result
+            # Repeat API request after renew token
+            result = self.call(method, params1, params2, params3, params4)
+        elif 'error' in result and result['error'] in ('QUERY_LIMIT_EXCEEDED',):
+            # Suspend call on two second, wait for expired limitation time by Bitrix24 API
+            print('SLEEP =)')
+            sleep(2)
+            return self.call(method, params1, params2, params3, params4)
+        return result
+
+
+bx24 = Bitrix24('b24-f4kgfp', '8ee1njm7naiu47s7')
+
+result = bx24.call('user.get')
+print(result)
+
+
+BITRIX_WEBHOOK_URL = 'https://b24-f4kgfp.bitrix24.ru/rest/1/8ee1njm7naiu47s7/'
+
+
 def get_candidate_data(candidate_id):
-"""Получает данные кандидата из Bitrix24."""
+    domain = BITRIX_WEBHOOK_URL.partition("https://")[2].partition('.')[0]
+    webhook_key = BITRIX_WEBHOOK_URL.partition("rest/")[2].partition('/')[2]
+    bx24 = Bitrix24(domain, webhook_key, candidate_id)
+    return bx24.call('user.get')['result'][0]
+
+
+print(get_candidate_data(1), '!!!')
+
+
 def create_excel_file(data, filename):
-"""Создает Excel-файл с данными кандидата с помощью библиотеки openpyxl"
-# Пример использования
-candidate_id = 123
-candidate_data = get_candidate_data(candidate_id)
-if candidate_data:
-create_excel_file(candidate_data, 'candidate_data.xlsx')
+    wb = Workbook()
+    ws = wb.active
+    keys = list(map(lambda key: key if isinstance(key, int) else (key if isinstance(key, str) else 'val'),
+                    data.keys()))
+    values = list(map(lambda val: val if isinstance(val, int) else (val if isinstance(val, str) else f'{val}'),
+                      data.values()))
+    for key, val in zip(keys, values):
+        ws.append([key, val])
+    wb.save(f'{filename}.xlsx')
+
+
+create_excel_file(get_candidate_data(1), 'canidates')

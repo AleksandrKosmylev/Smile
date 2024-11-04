@@ -12,7 +12,7 @@ Install requirements
 pip install -r requirements.txt
 ```
 ### Start script
-* Change webhook in bitrix_candidate.py:\
+* Change webhook in bitrix_candidate.py: 
 
 BITRIX_WEBHOOK_URL = '***'
 

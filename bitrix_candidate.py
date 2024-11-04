@@ -10,8 +10,10 @@ def parse_webhook(webhook):
     domain = BITRIX_WEBHOOK_URL.partition("https://")[2].partition('.')[0]
     webhook_key = BITRIX_WEBHOOK_URL.partition("rest/")[2].partition('/')[2]
     return domain, webhook_key
+
+candidate_id=1
     
-def get_candidate_data(candidate_id=1):
+def get_candidate_data(candidate_id):
     domain, webhook_key = parse_webhook(BITRIX_WEBHOOK_URL)
     bx24 = Bitrix24(domain, webhook_key, candidate_id)
     return bx24.call('user.get')['result'][0]

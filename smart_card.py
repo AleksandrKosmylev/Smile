@@ -15,8 +15,9 @@ def  get_data_from_xls():
       dictionary[key] = value
     return dictionary
 
+candidate_id=1
 
-def create_smart_card(candidate_id=1):
+def create_smart_card(candidate_id):
     domain, webhook_key = parse_webhook(BITRIX_WEBHOOK_URL)
     bx24 = Bitrix24(domain, webhook_key, candidate_id)
     body = {
@@ -28,5 +29,5 @@ def create_smart_card(candidate_id=1):
     } 
     bx24.call('crm.item.add', body)
     
-create_smart_card()
+create_smart_card(candidate_id)
 

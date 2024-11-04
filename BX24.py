@@ -8,13 +8,6 @@ from requests import adapters, post, exceptions
 from multidimensional_urlencode import urlencode
 
 
-from openpyxl import Workbook
-
-"""
-bx24 = Bitrix24('b24-f4kgfp.bitrix24.ru')
-BITRIX_WEBHOOK_URL = 'https://b24-f4kgfp.bitrix24.ru/rest/1/8ee1njm7naiu47s7/'
-"""
-
 
 class Bitrix24(object):
     # domain = 'sysadmin.bitrix24.ru'
@@ -130,37 +123,3 @@ class Bitrix24(object):
             sleep(2)
             return self.call(method, params1, params2, params3, params4)
         return result
-
-
-bx24 = Bitrix24('b24-f4kgfp', '8ee1njm7naiu47s7')
-
-result = bx24.call('user.get')
-print(result)
-
-
-BITRIX_WEBHOOK_URL = 'https://b24-f4kgfp.bitrix24.ru/rest/1/8ee1njm7naiu47s7/'
-
-
-def get_candidate_data(candidate_id):
-    domain = BITRIX_WEBHOOK_URL.partition("https://")[2].partition('.')[0]
-    webhook_key = BITRIX_WEBHOOK_URL.partition("rest/")[2].partition('/')[2]
-    bx24 = Bitrix24(domain, webhook_key, candidate_id)
-    return bx24.call('user.get')['result'][0]
-
-
-print(get_candidate_data(1), '!!!')
-
-
-def create_excel_file(data, filename):
-    wb = Workbook()
-    ws = wb.active
-    keys = list(map(lambda key: key if isinstance(key, int) else (key if isinstance(key, str) else 'val'),
-                    data.keys()))
-    values = list(map(lambda val: val if isinstance(val, int) else (val if isinstance(val, str) else f'{val}'),
-                      data.values()))
-    for key, val in zip(keys, values):
-        ws.append([key, val])
-    wb.save(f'{filename}.xlsx')
-
-
-create_excel_file(get_candidate_data(1), 'canidates')
